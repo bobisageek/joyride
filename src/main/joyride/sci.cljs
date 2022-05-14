@@ -4,7 +4,7 @@
             ["vscode" :as vscode]
             [clojure.string :as str]
             [joyride.db :as db]
-            [joyride.config :refer [workspace-scripts-path]]
+            [joyride.config :refer [workspace-scripts-path] :as config]
             [joyride.utils :as utils]
             [sci-configs.funcool.promesa :as pconfig]
             [sci.core :as sci]))
@@ -19,6 +19,26 @@
       (str/replace  "." "/")
       (str ".cljs")))
 
+(defn source-script-ns [namespace {:keys [from]}]
+  (let [search-dirs (case from
+                      user [(config/user-abs-scripts-path)]
+                      workspace [(config/workspace-abs-scripts-path)]
+                      [(config/user-abs-scripts-path) (config/workspace-abs-scripts-path)])
+        path-to-ns (ns->path namespace)
+        search-paths (map #(path/join % path-to-ns) (filter identity search-dirs))
+        matching-files (filter fs/existsSync search-paths)]
+    (case (count matching-files)
+      1 (str (fs/readFileSync (first matching-files)))
+      0 (do
+          (utils/say-error (str "Could not find " 
+                                (when from (str from " "))
+                                "file: " path-to-ns))
+          "")
+      (do
+        (utils/say-error (str "More than one file found: " (set matching-files)
+                              ". Consider qualifying with :from."))
+        ""))))
+
 (def !ctx
   (volatile!
    (sci/init {:classes {'js goog/global
@@ -32,14 +52,7 @@
               :load-fn (fn [{:keys [namespace opts]}]
                          (cond
                            (symbol? namespace)
-                           {:source
-                            (let [path (ns->path namespace)]
-                              (str
-                               (fs/readFileSync
-                                (path/join
-                                 (utils/workspace-root)
-                                 workspace-scripts-path
-                                 path))))}
+                           {:source (source-script-ns namespace opts)}
                            (string? namespace) ;; node built-in or npm library
                            (if (= "vscode" namespace)
                              (do (sci/add-class! @!ctx 'vscode vscode)

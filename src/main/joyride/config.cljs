@@ -16,5 +16,5 @@
   "Returns the absolute path to the Workspace scripts directory
    returns `nil` if there is not workspace root"
   []
-  (when-let [workspace-root (:workspace-root-path db/!app-db)]
+  (when-let [workspace-root (:workspace-root-path @db/!app-db)]
     (path/join workspace-root workspace-scripts-path)))
